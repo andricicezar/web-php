@@ -1,4 +1,4 @@
-Pentru a rula aceste scripturi veti avea nevoie de doua terminale.
+Pentru a rula si folosi serviciul, veti avea nevoie de doua terminale.
 Intr-un terminal, porniti serverul cu comanda:
 ```bash
 php -S http://localhost:8080 server.php
