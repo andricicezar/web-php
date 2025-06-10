@@ -69,12 +69,84 @@ function select_user_permissions($user_id) {
 	return $filtered;
 }
 
+function helper_single_permission_check($path_pattern, $permission_type, $path, $operation) {
+	// Base case: if both arrays are empty, match
+	if (empty($path_pattern) && empty($path)) {
+		// Permission type check
+		if ($permission_type === $operation) {
+			return true;
+		}
+		if ($permission_type === 'rw' && $operation === 'r') {
+			return true;
+		}
+		return false;
+	}
+
+	// If pattern is empty but path is not, or vice versa, no match
+	if (empty($path_pattern) || empty($path)) {
+		return false;
+	}
+
+	// Wildcard: skip this segment in both pattern and path
+	if ($path_pattern[0] === '*') {
+		return helper_single_permission_check(array_slice($path_pattern, 1), $permission_type, array_slice($path, 1), $operation) ||
+			   helper_single_permission_check($path_pattern, $permission_type, array_slice($path,1), $operation);
+	}
+
+	// If segments don't match, fail
+	if ($path_pattern[0] !== $path[0]) {
+		return false;
+	}
+
+	// Segments are equal, recurse for next segment
+	return helper_single_permission_check(array_slice($path_pattern, 1), $permission_type, array_slice($path, 1), $operation);
+}
+
+function helper_permissions_check($user_permissions, $path, $operation) {
+	$path = explode('/', $path);
+	foreach ($user_permissions as $user_permission) {
+		if (helper_single_permission_check(
+				explode('/',$user_permission['path_pattern']),
+				$user_permission['permission_type'],
+				$path, 
+				$operation)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function permissions_check($data) {
 	global $types_of_permissions;
 
-    // TODO: implementati aici 
-    header('Content-Type: application/json');
-    header("HTTP/1.1 501 Not Implemented");
-    echo json_encode(['error' => 'Not implemented']);
-    exit();
+	if(!isset($data['user_id']) || !isset($data['path']) || !isset($data['operation'])) {
+		header('Content-Type: application/json');
+		header("HTTP/1.1 400 Bad Request");
+		echo json_encode(['error' => 'POST body is invalid']);
+		exit();
+	}
+
+	$user_id = intval($data['user_id']);
+	$path = $data['path'];
+    $operation = $data['operation'];
+
+	if (!in_array($operation, $types_of_permissions)) {
+		header('Content-Type: application/json');
+		header("HTTP/1.1 400 Bad Request");
+		echo json_encode(['error' => 'Operation is not in $types_of_permissions']);
+		exit();	
+	}
+
+	$user_permissions = select_user_permissions($user_id);
+	if (helper_permissions_check($user_permissions, $path, $operation)) {
+		header('Content-Type: application/json');
+		header("HTTP/1.1 200 OK");
+		echo json_encode(['permitted' => true, 'message' => 'User is allowed to perform the operation.']);
+		exit();	
+	} else {
+		header('Content-Type: application/json');
+		header("HTTP/1.1 200 OK");
+		echo json_encode(['permitted' => false, 'message' => 'User is not allowed to perform the operation.']);
+		exit();			
+	}
 };
